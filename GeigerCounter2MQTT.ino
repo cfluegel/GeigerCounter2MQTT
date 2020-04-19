@@ -10,7 +10,7 @@ WiFiClient client;
 
 // MQTT related settings 
 Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
-Adafruit_MQTT_Publish geiger_raw = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/geigercounter.raw");
+// Adafruit_MQTT_Publish geiger_raw = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/geigercounter.raw");
 Adafruit_MQTT_Publish geiger_cps = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/geigercounter.cps");
 Adafruit_MQTT_Publish geiger_cpm = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/geigercounter.cpm");
 Adafruit_MQTT_Publish geiger_uSv = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/geigercounter.usv");
@@ -72,7 +72,6 @@ void setup() {
 }
 
 void loop() {
-
   if (Serial.available() > 0)
   {
     inbuffer = Serial.read();
@@ -88,8 +87,9 @@ void loop() {
         Serial.print(measurement);
         Serial.println();
         Serial.println(measurement[strlen(measurement) - 6]);
+        Serial.println(measurement[strlen(measurement) - 7]);
 #endif
-      if ( measurement[0] == 'C' && measurement[1] == 'P' && measurement[2] == 'S' && measurement[3] == ',' && measurement[strlen(measurement) - 6] == ',' )
+      if ( measurement[0] == 'C' && measurement[1] == 'P' && measurement[2] == 'S' && measurement[3] == ',' && measurement[4] == ' ')
       {
 #ifdef DEBUG
         Serial.println("Data was ok!");
@@ -138,16 +138,16 @@ void loop() {
       Serial.printf("Data has not been sent");
       Serial.println();
 #else
-      geiger_raw.publish(measurement);
-      delay(100);
+      // geiger_raw.publish(measurement);
+      delay(1500);
       geiger_cps.publish(CPS);
-      delay(100);
+      delay(1500);
       geiger_cpm.publish(CPM);
-      delay(100);
+      delay(1500);
       geiger_uSv.publish(uSv);
-      delay(100);
+      delay(1500);
       geiger_mode.publish(MeasurementMode);
-      delay(100);
+      delay(1500);
 #endif
       // Reset so that we dont get in here again. Unless there is new data.
       readytosend = false;
@@ -160,6 +160,7 @@ void loop() {
     }
     lastupdate = millis();
   }
+  
 }
 
 void MQTT_connect() {
