@@ -9,7 +9,7 @@
 // Internal Parameters 
 //+++++++++++++++++++++
 #define BAUD            9600
-#define MQTTUPDATERATE  120000
+#define MQTTUPDATERATE  60000
 
 // DEBUG Options
 //+++++++++++++++

@@ -10,7 +10,6 @@ WiFiClient client;
 
 // MQTT related settings 
 Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
-// Adafruit_MQTT_Publish geiger_raw = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/geigercounter.raw");
 Adafruit_MQTT_Publish geiger_cps = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/geigercounter.cps");
 Adafruit_MQTT_Publish geiger_cpm = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/geigercounter.cpm");
 Adafruit_MQTT_Publish geiger_uSv = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/geigercounter.usv");
@@ -24,7 +23,7 @@ unsigned int buffposition = 0;
 unsigned long lastupdate = 0;
 
 // Related to measurement data
-char measurement[64];
+char measurement[100];
 
 int CPS = -1;
 int CPM = -1;
@@ -33,8 +32,7 @@ char MeasurementMode[] = "NULL";
 
 // Flags
 bool startfound = false;
-bool complete = false;
-bool readytosend = false;
+bool endfound = false; 
 
 // Functions
 void MQTT_connect();
@@ -66,13 +64,24 @@ void setup() {
   }
 
 #ifdef DEBUGLED
-  // Turn the LED off
   digitalWrite(LED_BUILTIN, HIGH);
 #endif
 }
+void resetVariable() {
+  // Reset everything as we have send those
+  lastupdate = millis();
+  startfound = false;  
+  endfound = false;
+  CPS, CPM = -1;
+  uSv = -1.0;
+  strcpy(MeasurementMode, "NULL");
+  strcpy(measurement, "");
+  startfound = false;
+  buffposition = 0;
+}
 
 void loop() {
-  if (Serial.available() > 0)
+  if (Serial.available() > 0 && !endfound)
   {
     inbuffer = Serial.read();
 
@@ -83,84 +92,49 @@ void loop() {
       measurement[buffposition++] = inbuffer;
     } else if (startfound && inbuffer == '\n') {
 #ifdef DEBUG
-        Serial.printf("Received measurement data: ");
-        Serial.print(measurement);
-        Serial.println();
-        Serial.println(measurement[strlen(measurement) - 6]);
-        Serial.println(measurement[strlen(measurement) - 7]);
-#endif
-      if ( measurement[0] == 'C' && measurement[1] == 'P' && measurement[2] == 'S' && measurement[3] == ',' && measurement[4] == ' ')
-      {
-#ifdef DEBUG
-        Serial.println("Data was ok!");
+      Serial.printf("Data found: ");
+      Serial.println(measurement);
 #endif 
-        complete = true;
-        readytosend = true;
-        sscanf(measurement, "CPS, %d, CPM, %d, uSv/hr, %f, %s", &CPS, &CPM, &uSv, MeasurementMode);
+      if (measurement[0] == 'C' && measurement[1] == 'P' && measurement[2] == 'S' && measurement[3] == ',' && measurement[4] == ' ') {
+        endfound = true; 
       } else {
-        // In case we do not find the correct chars on the positions, we assume the string is 
-        // faulty and should not be used. In this case we reset everything and wait for the 
-        // next transmission. 
-        CPS, CPM = -1;
-        uSv = -1.0;
-        strcpy(MeasurementMode, "NULL");
-
-        complete = false;
-        startfound = false;
-        buffposition = 0;
-        measurement[0] = '\0';
+        resetVariable();
       }
     }
-    inbuffer = '\0';
-  }
-
-  if ((millis() - lastupdate) > MQTTUPDATERATE) {
-#ifdef DEBUG
-    Serial.printf("Updatetime reached");
-    Serial.println();
-#endif
-    if (complete && readytosend) {
-#ifdef DEBUGLED
-      // Switch on LED
-      digitalWrite(LED_BUILTIN, LOW);
-#endif
-      delay(500);
-
-      //connect to mqtt
-#ifdef DEBUG
-      Serial.printf("Connect to MQTT Server");
-      Serial.println();
-#endif
+  } else if (startfound && endfound) {
+    if ((millis() - lastupdate) > MQTTUPDATERATE) {
       MQTT_connect();
-      delay(100);
+#ifdef DEBUG
+      Serial.println("Data will be sent!");
+#endif 
+      sscanf(measurement, "CPS, %d, CPM, %d, uSv/hr, %f, %s", &CPS, &CPM, &uSv, MeasurementMode);
 
 #ifdef DEBUGNOSEND
-      Serial.printf("Data has not been sent");
-      Serial.println();
-#else
-      // geiger_raw.publish(measurement);
-      delay(1500);
+      Serial.printf("Data will not be sent!\n");
+      Serial.printf("CPS: %d | CPM: %d | uSv: %f \n", CPS, CPM, uSv); 
+#else 
+      delay(1000);
       geiger_cps.publish(CPS);
-      delay(1500);
+      delay(1000);
       geiger_cpm.publish(CPM);
-      delay(1500);
+      delay(1000);
       geiger_uSv.publish(uSv);
-      delay(1500);
+      delay(1000);
       geiger_mode.publish(MeasurementMode);
-      delay(1500);
+      delay(1000);
 #endif
-      // Reset so that we dont get in here again. Unless there is new data.
-      readytosend = false;
-      measurement[0] = '\0';
 
-#ifdef DEBUGLED
-      // Switch off LED
-      digitalWrite(LED_BUILTIN, HIGH);
-#endif
-    }
-    lastupdate = millis();
-  }
-  
+#ifdef DEBUG
+      Serial.printf("Data will be reset!\n");
+#endif 
+      // Reset everything as we have send those
+      resetVariable();
+#ifdef DEBUG
+      Serial.printf("Data has been reset!\n");
+#endif 
+      mqtt.disconnect();
+    } 
+  } 
 }
 
 void MQTT_connect() {
